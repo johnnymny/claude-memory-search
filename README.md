@@ -79,6 +79,17 @@ python3 -m venv .venv
 
 `settings.json` には `mcpServers` フィールドがないため、`.mcp.json` を使う。
 
+## CLAUDE.mdへの追記（推奨）
+
+MCPツールを登録しただけではClaude Codeは自発的に使わない。プロジェクトの `CLAUDE.md` に以下のようなルールを追記することで、エージェントが適切なタイミングで過去ログを検索するようになる。
+
+```markdown
+## Memory Search MCP
+
+確信がない時・過去の経験が関係しそうな時は memory_search で過去セッションログを検索せよ。
+新しいセッションログを取り込むには memory_ingest を実行する。
+```
+
 ## MCPツール
 
 ### `memory_search(query, limit=5)`
