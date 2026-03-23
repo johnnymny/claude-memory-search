@@ -216,6 +216,15 @@ def create_chunks(messages: list[dict], session_id: str, project_path: str) -> l
             f"{session_id}:{chunk_index}".encode()
         ).hexdigest()
 
+        # epoch for ChromaDB numeric filtering (string $gte not supported)
+        timestamp_epoch = 0.0
+        if timestamp:
+            try:
+                dt = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+                timestamp_epoch = dt.timestamp()
+            except Exception:
+                pass
+
         chunks.append({
             "id": chunk_id,
             "text": chunk_text,
@@ -223,6 +232,7 @@ def create_chunks(messages: list[dict], session_id: str, project_path: str) -> l
                 "session_id": session_id,
                 "project_path": project_path,
                 "timestamp": str(timestamp),
+                "timestamp_epoch": timestamp_epoch,
                 "chunk_index": chunk_index,
             },
         })

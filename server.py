@@ -48,15 +48,19 @@ mcp = FastMCP("memory-search")
 
 
 @mcp.tool()
-def memory_search(query: str, limit: int = 5) -> str:
+def memory_search(query: str, limit: int = 5, date_from: str = "", date_to: str = "") -> str:
     """過去のClaude Codeセッションログから類似する会話を検索する。
 
     確信がない時、過去に同じ問題を解決した記憶がありそうな時、
     以前の議論や決定事項を参照したい時に使う。
+    日付フィルタで期間を絞り込める。「3日前のXXについて」のような
+    時系列検索にはdate_from/date_toを使う。
 
     Args:
         query: 検索クエリ（日本語・英語どちらでも可）
         limit: 返す結果の最大数（デフォルト: 5）
+        date_from: 検索開始日（ISO 8601形式、例: "2026-03-05"）。この日以降の会話に絞る
+        date_to: 検索終了日（ISO 8601形式、例: "2026-03-06"）。この日より前の会話に絞る
     """
     model = _get_model()
     collection = _get_collection()
@@ -70,11 +74,36 @@ def memory_search(query: str, limit: int = 5) -> str:
     # e5モデルは検索時に "query: " プレフィックスを付ける
     query_embedding = model.encode(f"query: {query}", show_progress_bar=False).tolist()
 
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=min(limit, 20),
-        include=["documents", "metadatas", "distances"],
-    )
+    # 日付フィルタの構築（ChromaDB $gte/$lt requires numeric → epoch seconds）
+    from datetime import datetime as _dt, timezone as _tz
+    where_filter = None
+    try:
+        epoch_from = _dt.fromisoformat(date_from).replace(tzinfo=_tz.utc).timestamp() if date_from else None
+        epoch_to = _dt.fromisoformat(date_to).replace(tzinfo=_tz.utc).timestamp() if date_to else None
+    except Exception:
+        epoch_from = epoch_to = None
+
+    if epoch_from and epoch_to:
+        where_filter = {
+            "$and": [
+                {"timestamp_epoch": {"$gte": epoch_from}},
+                {"timestamp_epoch": {"$lt": epoch_to}},
+            ]
+        }
+    elif epoch_from:
+        where_filter = {"timestamp_epoch": {"$gte": epoch_from}}
+    elif epoch_to:
+        where_filter = {"timestamp_epoch": {"$lt": epoch_to}}
+
+    query_kwargs = {
+        "query_embeddings": [query_embedding],
+        "n_results": min(limit, 20),
+        "include": ["documents", "metadatas", "distances"],
+    }
+    if where_filter:
+        query_kwargs["where"] = where_filter
+
+    results = collection.query(**query_kwargs)
 
     formatted = []
     for i in range(len(results["ids"][0])):
